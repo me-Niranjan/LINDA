@@ -1,166 +1,155 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
+import React, { useEffect, useRef, useState } from "react";
 import L from "leaflet";
-import axios from "axios";
-import MapComponent from "./components/map";
-
-
-const markerIcon = new L.Icon({
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  iconSize: [25, 41],
-  iconAnchor: [12, 41],
-});
-
-function LocationMarker({ setLat, setLng }) {
-  useMapEvents({
-    click(e) {
-      setLat(e.latlng.lat);
-      setLng(e.latlng.lng);
-    },
-  });
-  return null;
-}
-
-function RecenterMap({ lat, lng }) {
-  const map = useMap();
-  useEffect(() => {
-    map.setView([lat, lng]);
-  }, [lat, lng, map]);
-  return null;
-}
+import "leaflet/dist/leaflet.css";
 
 function App() {
-  const [lat, setLat] = useState(20.5937);
-  const [lng, setLng] = useState(78.9629);
-  const [zoom] = useState(5);
-  const [place, setPlace] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
+  const mapRef = useRef(null);
+  const markerRef = useRef(null);
+  const [map, setMap] = useState(null);
+  const [locationInfo, setLocationInfo] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
 
-  // Debounced search
-  const searchPlace = useCallback(async (query) => {
-    if (!query.trim()) {
-      setResults([]);
-      return;
-    }
-    try {
-      setLoading(true);
-      const res = await axios.get(`https://nominatim.openstreetmap.org/search`, {
-        params: {
-          q: query,
-          format: "json",
-          addressdetails: 1,
-          limit: 5,
-        },
-      });
-      setResults(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+  // Initialize map
+  useEffect(() => {
+    const markerIcon = L.icon({
+      iconUrl: "https://cdn-icons-png.flaticon.com/512/684/684908.png",
+      iconSize: [30, 30],
+      iconAnchor: [15, 30],
+    });
+
+    const mapInstance = L.map(mapRef.current).setView([20.5937, 78.9629], 5);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(mapInstance);
+
+    markerRef.current = L.marker([20.5937, 78.9629], { icon: markerIcon }).addTo(mapInstance);
+
+    mapInstance.on("click", (e) => {
+      const { lat, lng } = e.latlng;
+      markerRef.current.setLatLng([lat, lng]);
+      fetchLocationInfo(lat, lng);
+    });
+
+    setMap(mapInstance);
   }, []);
 
-  useEffect(() => {
-    const delayDebounce = setTimeout(() => {
-      searchPlace(place);
-    }, 500); // 0.5s delay after typing stops
-    return () => clearTimeout(delayDebounce);
-  }, [place, searchPlace]);
+  // Fetch location info from coordinates
+  const fetchLocationInfo = async (lat, lng) => {
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
+      );
+      const data = await res.json();
+      setLocationInfo({
+        name: data.display_name,
+        lat: lat.toFixed(6),
+        lng: lng.toFixed(6),
+      });
+    } catch (err) {
+      console.error("Error fetching location info:", err);
+    }
+  };
 
-  const selectPlace = (lat, lon) => {
-    setLat(parseFloat(lat));
-    setLng(parseFloat(lon));
-    setResults([]);
-    setPlace("");
+  // Handle live search input
+  const handleSearchChange = async (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    if (query.length < 3) {
+      setSuggestions([]);
+      return;
+    }
+
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
+      );
+      const data = await res.json();
+      setSuggestions(data);
+    } catch (err) {
+      console.error("Error fetching search suggestions:", err);
+    }
+  };
+
+  // Handle selecting a suggestion
+  const handleSuggestionClick = (place) => {
+    const lat = parseFloat(place.lat);
+    const lon = parseFloat(place.lon);
+    markerRef.current.setLatLng([lat, lon]);
+    map.setView([lat, lon], 13);
+    setLocationInfo({
+      name: place.display_name,
+      lat: lat.toFixed(6),
+      lng: lon.toFixed(6),
+    });
+    setSuggestions([]);
+    setSearchQuery(place.display_name);
   };
 
   return (
     <div style={{ display: "flex", height: "100vh" }}>
-      
       {/* Sidebar */}
-      <div style={{ width: "280px", padding: "15px", background: "#f8f8f8", borderRight: "1px solid #ddd" }}>
-        <h3>Target Location</h3>
-        <p><strong>Latitude:</strong> {lat.toFixed(6)}</p>
-        <p><strong>Longitude:</strong> {lng.toFixed(6)}</p>
-
+      <div style={{ width: "300px", padding: "10px", background: "#f0f0f0" }}>
+        <h2>Location Search</h2>
         <input
-          type="number"
-          value={lat}
-          onChange={(e) => setLat(parseFloat(e.target.value))}
-          placeholder="Latitude"
-          style={{ width: "100%", marginBottom: "10px" }}
+          type="text"
+          value={searchQuery}
+          onChange={handleSearchChange}
+          placeholder="Search for a place..."
+          style={{ width: "100%", padding: "5px" }}
         />
-        <input
-          type="number"
-          value={lng}
-          onChange={(e) => setLng(parseFloat(e.target.value))}
-          placeholder="Longitude"
-          style={{ width: "100%", marginBottom: "10px" }}
-        />
-
-        <div style={{ position: "relative" }}>
-          <input
-            type="text"
-            value={place}
-            onChange={(e) => setPlace(e.target.value)}
-            placeholder="Search place..."
-            style={{ width: "100%", marginBottom: "10px" }}
-          />
-          {loading && <div style={{ fontSize: "12px", color: "#666" }}>Searching...</div>}
-
-          {/* Dropdown results */}
-          {results.length > 0 && (
-            <ul style={{
+        {suggestions.length > 0 && (
+          <ul
+            style={{
               listStyle: "none",
+              padding: 0,
               margin: 0,
-              padding: "5px",
               background: "#fff",
               border: "1px solid #ccc",
-              position: "absolute",
-              width: "100%",
-              zIndex: 1000,
               maxHeight: "150px",
-              overflowY: "auto"
-            }}>
-              {results.map((r, i) => (
-                <li
-                  key={i}
-                  onClick={() => selectPlace(r.lat, r.lon)}
-                  style={{ padding: "5px", cursor: "pointer", borderBottom: "1px solid #eee" }}
-                >
-                  {r.display_name}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+              overflowY: "auto",
+            }}
+          >
+            {suggestions.map((s, idx) => (
+              <li
+                key={idx}
+                onClick={() => handleSuggestionClick(s)}
+                style={{
+                  padding: "5px",
+                  cursor: "pointer",
+                  borderBottom: "1px solid #eee",
+                }}
+              >
+                {s.display_name}
+              </li>
+            ))}
+          </ul>
+        )}
 
-        <p style={{ fontSize: "12px", marginTop: "10px", color: "#555" }}>
-          Click the map, type coordinates, or search by place name.
-        </p>
+        {locationInfo && (
+          <div style={{ marginTop: "20px" }}>
+            <h3>Location Info</h3>
+            <p>
+              <strong>Name:</strong> {locationInfo.name}
+            </p>
+            <p>
+              <strong>Latitude:</strong> {locationInfo.lat}
+            </p>
+            <p>
+              <strong>Longitude:</strong> {locationInfo.lng}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Map */}
-      <div style={{ flex: 1 }}>
-        <MapContainer center={[lat, lng]} zoom={zoom} style={{ height: "100%", width: "100%" }}>
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="&copy; OpenStreetMap contributors"
-          />
-          <Marker position={[lat, lng]} icon={markerIcon}>
-            <Popup>
-              Target Location: {lat.toFixed(6)}, {lng.toFixed(6)}
-            </Popup>
-          </Marker>
-          <LocationMarker setLat={setLat} setLng={setLng} />
-          <RecenterMap lat={lat} lng={lng} />
-        </MapContainer>
-      </div>
+      <div ref={mapRef} style={{ flex: 1 }}></div>
     </div>
   );
 }
 
 export default App;
+
 
