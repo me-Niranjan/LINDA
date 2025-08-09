@@ -3,6 +3,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from "re
 import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import axios from "axios";
+import MapComponent from "./components/map";
+
 
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
