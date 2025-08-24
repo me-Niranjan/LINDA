@@ -1,66 +1,98 @@
-.app-container {
+/* Layout */
+.app {
   display: flex;
   height: 100vh;
   width: 100vw;
-  font-family: Arial, sans-serif;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 }
 
-.side-panel {
-  width: 300px;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.7); /* Glass effect */
+/* Side panel (left) */
+.side {
+  width: 320px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(10px);
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   overflow-y: auto;
 }
 
-.map-container {
-  flex: 1;
-  position: relative;
+.sectionTitle {
+  margin: 0 0 8px 0;
+  font-size: 18px;
 }
 
-.search-bar {
-  position: absolute;
-  top: 15px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1000;
-  width: 300px;
+.card {
+  background: #ffffff;
+  border: 1px solid #eee;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
-.search-bar input {
+.row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed #eee;
+}
+.row:last-child { border-bottom: none; }
+
+.label { color: #666; }
+.value { font-weight: 600; }
+
+.muted { color: #888; font-size: 14px; }
+
+.imgWrap { margin-top: 8px; }
+.img {
   width: 100%;
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #ccc;
+  border-radius: 10px;
+  display: block;
 }
 
-.suggestions {
+/* Map area (right) */
+.mapWrap {
+  position: relative;
+  flex: 1;
+}
+
+/* Floating search */
+.searchWrap {
+  position: absolute;
+  z-index: 1000;
+  top: 14px;
+  left: 23%;
+  transform: translateX(-50%);
+  width: 420px;
+  max-width: calc(100% - 40px);
+}
+
+.searchInput {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  outline: none;
+  font-size: 14px;
+  background: #fff;
+}
+
+.suggestList {
   list-style: none;
-  margin: 0;
+  margin: 6px 0 0;
   padding: 0;
-  background: white;
-  border: 1px solid #ccc;
-  max-height: 200px;
+  max-height: 260px;
   overflow-y: auto;
+  background: #fff;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
 }
 
-.suggestions li {
-  padding: 8px;
+.suggestList li {
+  padding: 10px 12px;
   cursor: pointer;
 }
-
-.suggestions li:hover {
-  background: #f0f0f0;
-}
-
-.imagery-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, 100px);
-  gap: 10px;
-}
-
-.imagery-grid img {
-  width: 100px;
-  border-radius: 6px;
+.suggestList li:hover {
+  background: #f5f7fb;
 }

@@ -4,13 +4,14 @@ import {
   TileLayer,
   Marker,
   Popup,
+  useMap,
   useMapEvents,
 } from "react-leaflet";
-import "leaflet/dist/leaflet.css";
 import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import "./App.css";
 
-// Marker icon fix for Leaflet
+// Leaflet marker icon (fix for missing default icon)
 const markerIcon = new L.Icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
@@ -20,115 +21,146 @@ const markerIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
-// Component to handle map clicks
-function LocationMarker({ onLocationSelect }) {
-  const [position, setPosition] = useState(null);
-
-  useMapEvents({
-    click(e) {
-      setPosition(e.latlng);
-      onLocationSelect(e.latlng);
-    },
-  });
-
-  return position === null ? null : (
-    <Marker position={position} icon={markerIcon}>
-      <Popup>
-        Lat: {position.lat.toFixed(4)}, Lng: {position.lng.toFixed(4)}
-      </Popup>
-    </Marker>
-  );
+// Recenter map when position changes
+function RecenterOnPosition({ position, zoom = 6 }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position) map.setView(position, zoom, { animate: true });
+  }, [position, zoom, map]);
+  return null;
 }
 
-function App() {
-  const [selectedLocation, setSelectedLocation] = useState(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [suggestions, setSuggestions] = useState([]);
-  const [passTimes, setPassTimes] = useState([]); // placeholder for backend
-  const [imagery, setImagery] = useState([]); // placeholder for backend
+// Capture map clicks reliably
+function MapClickHandler({ onPick }) {
+  useMapEvents({
+    click(e) {
+      onPick({
+        lat: e.latlng.lat,
+        lng: e.latlng.lng,
+        name: `Lat ${e.latlng.lat.toFixed(4)}, Lon ${e.latlng.lng.toFixed(4)}`,
+      });
+    },
+  });
+  return null;
+}
 
-  // Geocoding for live search
-  const fetchSuggestions = async (query) => {
-    if (!query) {
+export default function App() {
+  // Default center: India-ish
+  const [selected, setSelected] = useState({ lat: 20, lng: 78, name: "Start" });
+  const [suggestions, setSuggestions] = useState([]);
+  const [query, setQuery] = useState("");
+  const [satelliteData, setSatelliteData] = useState(null);
+
+  // Fetch mock backend data once (kept for wiring)
+  useEffect(() => {
+    fetch("http://localhost:5000/mock-satellite")
+      .then((r) => r.json())
+      .then(setSatelliteData)
+      .catch((err) => console.error("Mock fetch failed:", err));
+  }, []);
+
+  // Live search (debounced)
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 3) {
       setSuggestions([]);
       return;
     }
-    const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${query}`
-    );
-    const data = await res.json();
-    setSuggestions(data);
-  };
+    const controller = new AbortController();
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+            q
+          )}&limit=8`,
+          { signal: controller.signal, headers: { "Accept-Language": "en" } }
+        );
+        const data = await res.json();
+        setSuggestions(data || []);
+      } catch (_) {
+        /* ignore abort/errors for typing */
+      }
+    }, 300);
 
-  const handleSearchChange = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    fetchSuggestions(query);
-  };
+    return () => {
+      controller.abort();
+      clearTimeout(t);
+    };
+  }, [query]);
 
   const handleSuggestionClick = (place) => {
-    setSelectedLocation({
-      lat: parseFloat(place.lat),
-      lng: parseFloat(place.lon),
-      display_name: place.display_name,
-    });
+    const lat = parseFloat(place.lat);
+    const lng = parseFloat(place.lon);
+    setSelected({ lat, lng, name: place.display_name });
+    setQuery(place.display_name);
     setSuggestions([]);
-    setSearchQuery(place.display_name);
   };
 
+  const position = [selected.lat, selected.lng];
+
   return (
-    <div className="app-container">
-      {/* Left Side Panel */}
-      <div className="side-panel">
-        <h2>📍 Location Info</h2>
-        {selectedLocation ? (
-          <div>
-            <p><b>Place:</b> {selectedLocation.display_name}</p>
-            <p><b>Lat:</b> {selectedLocation.lat.toFixed(4)}</p>
-            <p><b>Lon:</b> {selectedLocation.lng.toFixed(4)}</p>
+    <div className="app">
+      {/* LEFT: Side Panel */}
+      <aside className="side">
+        <h2 className="sectionTitle">📍 Location</h2>
+        <div className="card">
+          <div className="row">
+            <span className="label">Name</span>
+            <span className="value">{selected?.name || "—"}</span>
           </div>
-        ) : (
-          <p>Select a location on the map</p>
-        )}
-
-        <h2>🛰️ Next Landsat Pass</h2>
-        {passTimes.length > 0 ? (
-          <ul>
-            {passTimes.map((time, idx) => (
-              <li key={idx}>{time}</li>
-            ))}
-          </ul>
-        ) : (
-          <p>No data yet (waiting for backend)</p>
-        )}
-
-        <h2>🖼️ Latest Imagery</h2>
-        {imagery.length > 0 ? (
-          <div className="imagery-grid">
-            {imagery.map((img, idx) => (
-              <img key={idx} src={img} alt="Landsat thumbnail" />
-            ))}
+          <div className="row">
+            <span className="label">Latitude</span>
+            <span className="value">{selected.lat.toFixed(5)}</span>
           </div>
-        ) : (
-          <p>No images yet</p>
-        )}
-      </div>
+          <div className="row">
+            <span className="label">Longitude</span>
+            <span className="value">{selected.lng.toFixed(5)}</span>
+          </div>
+        </div>
 
-      {/* Map + Search */}
-      <div className="map-container">
-        {/* Live Search Bar */}
-        <div className="search-bar">
+        <h2 className="sectionTitle">🛰️ Mock Satellite</h2>
+        <div className="card">
+          {satelliteData ? (
+            <>
+              <div className="row">
+                <span className="label">Satellite</span>
+                <span className="value">{satelliteData.satellite}</span>
+              </div>
+              <div className="row">
+                <span className="label">Pass Time</span>
+                <span className="value">
+                  {new Date(satelliteData.passTime).toLocaleString()}
+                </span>
+              </div>
+              <div className="imgWrap">
+                <img
+                  src={satelliteData.imageUrl}
+                  alt="Mock satellite"
+                  className="img"
+                />
+              </div>
+            </>
+          ) : (
+            <p className="muted">Loading from backend…</p>
+          )}
+        </div>
+      </aside>
+
+      {/* RIGHT: Map */}
+      <main className="mapWrap">
+        {/* Floating live search */}
+        <div className="searchWrap">
           <input
-            type="text"
-            value={searchQuery}
-            onChange={handleSearchChange}
-            placeholder="Search a place..."
+            className="searchInput"
+            placeholder="Search a place (min 3 chars)…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
           />
           {suggestions.length > 0 && (
-            <ul className="suggestions">
-              {suggestions.map((place, idx) => (
-                <li key={idx} onClick={() => handleSuggestionClick(place)}>
-                  {place.display_name}
+            <ul className="suggestList">
+              {suggestions.map((s, i) => (
+                <li key={i} onClick={() => handleSuggestionClick(s)}>
+                  {s.display_name}
                 </li>
               ))}
             </ul>
@@ -136,27 +168,26 @@ function App() {
         </div>
 
         <MapContainer
-          center={[20, 78]} // Default India center
-          zoom={4}
+          center={position}
+          zoom={5}
           style={{ height: "100vh", width: "100%" }}
         >
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="&copy; OpenStreetMap contributors"
           />
-          <LocationMarker onLocationSelect={setSelectedLocation} />
-          {selectedLocation && (
-            <Marker
-              position={[selectedLocation.lat, selectedLocation.lng]}
-              icon={markerIcon}
-            >
-              <Popup>{selectedLocation.display_name}</Popup>
-            </Marker>
-          )}
+          <MapClickHandler onPick={setSelected} />
+          <RecenterOnPosition position={position} zoom={6} />
+
+          <Marker position={position} icon={markerIcon}>
+            <Popup>
+              {selected.name}
+              <br />
+              {selected.lat.toFixed(4)}, {selected.lng.toFixed(4)}
+            </Popup>
+          </Marker>
         </MapContainer>
-      </div>
+      </main>
     </div>
   );
 }
-
-export default App;
