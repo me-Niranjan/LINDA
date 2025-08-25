@@ -21,6 +21,20 @@ const markerIcon = new L.Icon({
   shadowSize: [41, 41],
 });
 
+// Sample granule data (for demo, until backend wiring is done)
+const sampleGranules = [
+  {
+    title: "HLSL30 v2.0 Granule 2025-08-20",
+    time: "2025-08-20T05:30:00Z",
+    download: "https://data.lpdaac.earthdatacloud.nasa.gov/path/to/file",
+  },
+  {
+    title: "HLSL30 v2.0 Granule 2025-08-18",
+    time: "2025-08-18T04:20:00Z",
+    download: "https://data.lpdaac.earthdatacloud.nasa.gov/path/to/file2",
+  },
+];
+
 // Recenter map when position changes
 function RecenterOnPosition({ position, zoom = 6 }) {
   const map = useMap();
@@ -50,6 +64,7 @@ export default function App() {
   const [suggestions, setSuggestions] = useState([]);
   const [query, setQuery] = useState("");
   const [satelliteData, setSatelliteData] = useState(null);
+  const [granules, setGranules] = useState(sampleGranules); // ✅ fixed here
 
   // Fetch mock backend data once (kept for wiring)
   useEffect(() => {
@@ -144,6 +159,30 @@ export default function App() {
             <p className="muted">Loading from backend…</p>
           )}
         </div>
+
+        {/* Granules Section */}
+        <h2>🗂️ Granule Results</h2>
+        {granules.length > 0 ? (
+          <ul className="granule-list">
+            {granules.map((g, idx) => (
+              <li key={idx}>
+                <b>{g.title}</b>
+                <br />
+                <span>{new Date(g.time).toLocaleString()}</span>
+                <br />
+                <a
+                  href={g.download}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Download
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p>No granule data</p>
+        )}
       </aside>
 
       {/* RIGHT: Map */}
