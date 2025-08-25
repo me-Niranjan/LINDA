@@ -1,39 +1,45 @@
 // backend/server.js
 const express = require("express");
+const axios = require("axios");
 const cors = require("cors");
 
 const app = express();
+app.use(cors());
+
 const PORT = 5000;
 
-app.use(cors());
-app.use(express.json());
+// 🔹 Route to fetch imagery from NASA CMR
+app.get("/api/imagery", async (req, res) => {
+  const { lat, lon } = req.query;
 
-// --- Basic test route ---
-app.get("/ping", (req, res) => {
-  res.json({ message: "Backend is alive!" });
+  if (!lat || !lon) {
+    return res.status(400).json({ error: "lat and lon required" });
+  }
+
+  try {
+    // NASA CMR API search for HLSL30 dataset (Landsat-Sentinel harmonized)
+    const response = await axios.get("https://cmr.earthdata.nasa.gov/search/granules.json", {
+      params: {
+        short_name: "HLSL30",   // Landsat-based HLS product
+        bounding_box: `${lon-0.01},${lat-0.01},${lon+0.01},${lat+0.01}`, 
+        page_size: 5,
+        sort_key: "-start_date"
+      }
+    });
+
+    const granules = response.data.feed.entry.map(item => ({
+      title: item.title,
+      time: item.time_start,
+      download: item.links?.find(l => l.rel.includes("data#"))?.href || "N/A"
+    }));
+
+    res.json({ results: granules });
+  } catch (err) {
+    console.error("Error fetching imagery:", err.message);
+    res.status(500).json({ error: "Failed to fetch imagery" });
+  }
 });
 
-// --- 🔥 Mock satellite route ---
-app.get("/mock-satellite", (req, res) => {
-  res.json({
-    location: "23.5°N, 85.0°E",
-    satellite: "MockSat-1",
-    passTime: "2025-08-24T10:15:00Z",
-    imageUrl: "https://via.placeholder.com/400x300.png?text=Mock+Satellite+Image"
-  });
-});
-
-// --- 🔥 Mock imagery route ---
-app.get("/mock-imagery", (req, res) => {
-  res.json({
-    imageryId: "IMG123456",
-    date: "2025-08-20",
-    provider: "MockProvider",
-    url: "https://via.placeholder.com/600x400.png?text=Mock+Imagery"
-  });
-});
-
-// Start server
 app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`✅ Backend running on http://localhost:${PORT}`);
 });
